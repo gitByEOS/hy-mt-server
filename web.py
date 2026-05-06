@@ -123,7 +123,7 @@ HTML = r"""<!doctype html>
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 8px 8px 38px;
+      padding: 8px 8px 44px;
       box-shadow: 0 18px 44px var(--shadow);
     }
 
@@ -150,16 +150,39 @@ HTML = r"""<!doctype html>
       left: 0;
       right: 0;
       bottom: 0;
-      height: 32px;
+      height: 38px;
+    }
+
+    .language-controls {
+      position: absolute;
+      left: 12px;
+      bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .language-label {
+      color: var(--muted);
+      white-space: nowrap;
     }
 
     .hint {
-      position: absolute;
-      left: 18px;
-      bottom: 0;
       color: var(--muted);
-      font-size: 12px;
-      line-height: 28px;
+      margin-left: 8px;
+      white-space: nowrap;
+    }
+
+    .language-controls select {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--text);
+      background: var(--panel-soft);
+      font: inherit;
+      outline: 0;
     }
 
     button {
@@ -169,7 +192,7 @@ HTML = r"""<!doctype html>
       padding: 2px 22px;
       position: absolute;
       right: 20px;
-      bottom: 2px;
+      bottom: 5px;
       background: var(--primary);
       color: var(--primary-text);
       font-size: 18px;
@@ -188,7 +211,7 @@ HTML = r"""<!doctype html>
   <div class="app">
     <header>
       <h1>离线翻译</h1>
-      <div class="subtitle">输入任意语言，翻译为中文</div>
+      <div class="subtitle">优先翻译成第一语言，如果输入为第一语言则翻译成第二语言</div>
     </header>
 
     <main id="messages">
@@ -199,7 +222,30 @@ HTML = r"""<!doctype html>
       <form class="composer" id="form">
         <textarea id="input" placeholder="输入要翻译的文本..." autofocus></textarea>
         <div class="actions">
-          <div class="hint">提示：Shift+Enter 换行</div>
+          <div class="language-controls" aria-label="翻译语言">
+            <span class="language-label">第一语言</span>
+            <select id="first-language" aria-label="第一语言">
+              <option value="中文">中文</option>
+              <option value="英文">英文</option>
+              <option value="日文">日文</option>
+              <option value="韩文">韩文</option>
+              <option value="法文">法文</option>
+              <option value="德文">德文</option>
+              <option value="西班牙文">西班牙文</option>
+            </select>
+            <span>→</span>
+            <span class="language-label">第二语言</span>
+            <select id="second-language" aria-label="第二语言">
+              <option value="英文">英文</option>
+              <option value="中文">中文</option>
+              <option value="日文">日文</option>
+              <option value="韩文">韩文</option>
+              <option value="法文">法文</option>
+              <option value="德文">德文</option>
+              <option value="西班牙文">西班牙文</option>
+            </select>
+            <span class="hint">提示：Shift+Enter 换行</span>
+          </div>
           <button id="submit" type="submit">翻译</button>
         </div>
       </form>
@@ -210,6 +256,8 @@ HTML = r"""<!doctype html>
     const form = document.getElementById("form");
     const input = document.getElementById("input");
     const submit = document.getElementById("submit");
+    const firstLanguage = document.getElementById("first-language");
+    const secondLanguage = document.getElementById("second-language");
     const messages = document.getElementById("messages");
     const empty = document.getElementById("empty");
 
@@ -226,12 +274,16 @@ HTML = r"""<!doctype html>
       return bubble;
     }
 
-    async function translate(text) {
+    async function translate(text, firstLanguageValue, secondLanguageValue) {
       const answer = addMessage("assistant", "");
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({
+          text,
+          first_language: firstLanguageValue,
+          second_language: secondLanguageValue,
+        }),
       });
 
       if (!response.ok || !response.body) {
@@ -254,11 +306,13 @@ HTML = r"""<!doctype html>
       const text = input.value.trim();
       if (!text) return;
 
+      const firstLanguageValue = firstLanguage.value;
+      const secondLanguageValue = secondLanguage.value;
       input.value = "";
       submit.disabled = true;
       addMessage("user", text);
       try {
-        await translate(text);
+        await translate(text, firstLanguageValue, secondLanguageValue);
       } catch (error) {
         addMessage("assistant", `翻译失败：${error.message}`);
       } finally {
@@ -339,9 +393,13 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             data = json.loads(self.rfile.read(length).decode("utf-8"))
             text = data["text"].strip()
+            first_language = data["first_language"].strip()
+            second_language = data["second_language"].strip()
             if not text:
                 raise ValueError("empty text")
-            self.proxy_translate(text)
+            if not first_language or not second_language:
+                raise ValueError("empty language")
+            self.proxy_translate(text, first_language, second_language)
         except (BrokenPipeError, ConnectionResetError):
             return
         except Exception as exc:
@@ -358,15 +416,21 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             return
 
-    def proxy_translate(self, text):
+    def proxy_translate(self, text, first_language, second_language):
         models = request_json("GET", "/v1/models")
         model_id = pick_model_id(models)
+        system_prompt = (
+            f"判断以下文本是否为{first_language}。"
+            f"如果是{first_language}，翻译为{second_language}；"
+            f"否则翻译为{first_language}。"
+            "只输出翻译后的结果，不要额外解释。"
+        )
         payload = {
             "model": model_id,
             "messages": [
                 {
                     "role": "system",
-                    "content": "将以下文本翻译为中文，注意只需要输出翻译后的结果，不要额外解释",
+                    "content": system_prompt,
                 },
                 {"role": "user", "content": text},
             ],
