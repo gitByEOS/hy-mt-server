@@ -15,11 +15,16 @@ PY
 install_model_launcher() {
     if [[ "$RUNTIME" == "mlx" ]]
     then
-        if ! has_python_module "mlx_lm"
+        if has_python_module "mlx_lm" && has_python_module "modelscope"
+        then
+            return
+        fi
+
+        if ! has_python_module "mlx_lm" || ! has_python_module "modelscope"
         then
             echo "📦 下载模型启动器: mlx-lm"
             echo "   PyPI 镜像: ${PIP_INDEX_URL}"
-            pip install --upgrade --index-url "$PIP_INDEX_URL" mlx-lm
+            pip install --upgrade --index-url "$PIP_INDEX_URL" mlx-lm modelscope
         fi
         return
     fi
@@ -42,6 +47,28 @@ install_model_launcher() {
 download_model() {
     if [[ "$RUNTIME" == "mlx" ]]
     then
+        if [[ ! -d "$MODEL_DIR" ]]
+        then
+            echo "⬇️  下载模型..."
+            echo "   模型仓库: ${MODEL_REPO}"
+            if ! modelscope download --model "$MODEL_REPO" --local_dir "$MODEL_DIR"
+            then
+                echo "❌ 模型下载失败。"
+                echo "   请检查网络，或手动执行: modelscope download --model ${MODEL_REPO} --local_dir ${MODEL_DIR}"
+                exit 1
+            fi
+        fi
+
+        if [[ ! -d "$MLX_MODEL_DIR" ]]
+        then
+            echo "🔁 转换 MLX 模型..."
+            mlx_lm.convert \
+                --hf-path "$MODEL_DIR" \
+                --mlx-path "$MLX_MODEL_DIR" \
+                --quantize \
+                --q-bits 8 \
+                --trust-remote-code
+        fi
         return
     fi
 
@@ -68,8 +95,8 @@ start_service() {
 
     if [[ "$RUNTIME" == "mlx" ]]
     then
-        echo "   模型: ${MODEL_ID}"
-        mlx_lm.server --model "$MODEL_ID" --host "127.0.0.1" --port "$SERVER_PORT"
+        echo "   模型: ${MLX_MODEL_DIR}"
+        mlx_lm.server --model "$MLX_MODEL_DIR" --host "127.0.0.1" --port "$SERVER_PORT"
         return
     fi
 
@@ -93,7 +120,9 @@ CPU_BRAND="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
 if [[ "$ARCH" == "arm64" && "$CPU_BRAND" == *"Apple M"* ]]
 then
     RUNTIME="mlx"
-    MODEL_ID="mlx-community/HY-MT1.5-1.8B-8bit"
+    MODEL_REPO="Tencent-Hunyuan/HY-MT1.5-1.8B"
+    MODEL_DIR="models/HY-MT1.5-1.8B"
+    MLX_MODEL_DIR="models/HY-MT1.5-1.8B-mlx-8bit"
 elif [[ "$ARCH" == "x86_64" && "$CPU_BRAND" == *"Intel"* ]]
 then
     RUNTIME="llama_cpp"

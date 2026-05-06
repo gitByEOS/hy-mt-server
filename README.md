@@ -3,7 +3,7 @@
 用于在 Mac 本地启动腾讯 HY-MT 翻译模型服务。
 
 支持：
-- Apple Silicon：使用 `mlx-lm`
+- Apple Silicon：ModelScope 下载原始模型，本地转换为 MLX 8bit 后使用 `mlx-lm`
 - Intel Mac：使用 `llama-cpp-python` + ModelScope GGUF 模型
 
 ## 环境要求
@@ -23,23 +23,8 @@ bash server.sh
 http://127.0.0.1:11878
 ```
 
-首次启动会自动创建虚拟环境、安装依赖、下载模型，大概需要5-10分钟，视网速而定。
+首次启动大概需要5-10分钟，会自动创建虚拟环境、安装依赖、下载模型。
 
-## Intel Mac 说明
-
-Intel Mac 使用 ModelScope 下载免登录模型：
-
-```text
-Tencent-Hunyuan/HY-MT1.5-1.8B-GGUF
-```
-
-默认下载文件：
-
-```text
-HY-MT1.5-1.8B-Q4_K_M.gguf
-```
-
-Intel Mac 会额外使用 `llama-cpp-python` CPU 预编译包源。
 
 ## 验证服务
 
