@@ -34,8 +34,19 @@ http://127.0.0.1:11878
 bash verify.sh
 ```
 
+## Raycast 对接
+
+1. 先启动本地服务
+2. 在 Raycast 输入 Create Script Command
+3. 选择`fanyi.sh`
+
+使用方式：
+- 输入 `fanyi`，按 Tab，输入文本后执行
+
 ## 文件说明
 
 - `server.sh`：启动模型服务
 - `verify.sh`：验证模型服务是否正常
+- `fanyi.sh`：翻译脚本
+- `models/`：下载的模型
 - `hy-mt-env/`：脚本自动创建的 Python 虚拟环境
