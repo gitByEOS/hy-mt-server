@@ -45,6 +45,24 @@ python3 web.py
 ```text
 http://电脑局域网IP:11888
 ```
+### 反向代理
+如果你觉得直接使用端口号不友好，你可以执行下列操作，这样你将获得一个`http://IP/translate`的代理入口
+
+1. 编辑 `/etc/apache2/httpd.conf`
+2. 搜索 `LoadModule proxy_module`，解开注释
+3. 搜索 `LoadModule proxy_http_module`，解开注释
+4. 文件尾部添加以下内容
+```bash
+# 开启反向代理功能
+ProxyRequests Off
+# 保留原始请求的域名
+ProxyPreserveHost On
+
+# 将所有访问 IP/translate 的请求，转发到本地的 11888 端口
+ProxyPass /translate http://127.0.0.1:11888/
+ProxyPassReverse /translate http://127.0.0.1:11888/
+```
+5. `sudo apachectl restart`，重启 apache 服务
 
 ## Raycast 对接
 

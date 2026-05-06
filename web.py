@@ -260,6 +260,8 @@ HTML = r"""<!doctype html>
     const secondLanguage = document.getElementById("second-language");
     const messages = document.getElementById("messages");
     const empty = document.getElementById("empty");
+    const apiBasePath = window.location.pathname.replace(/\/$/, "");
+    const translateApiPath = apiBasePath === "" ? "/api/translate" : `${apiBasePath}/api/translate`;
 
     function addMessage(role, text = "") {
       empty?.remove();
@@ -276,7 +278,7 @@ HTML = r"""<!doctype html>
 
     async function translate(text, firstLanguageValue, secondLanguageValue) {
       const answer = addMessage("assistant", "");
-      const response = await fetch("/api/translate", {
+      const response = await fetch(translateApiPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
