@@ -74,9 +74,17 @@ def stream_request(path, data):
         print()
 
 
+def pick_model_id(models):
+    for model in models["data"]:
+        model_id = model["id"]
+        if model_id.startswith("/") or "/" not in model_id:
+            return model_id
+    return models["data"][0]["id"]
+
+
 try:
     models = request("GET", "/v1/models")
-    model_id = models["data"][0]["id"]
+    model_id = pick_model_id(models)
     stream_request(
         "/v1/chat/completions",
         {

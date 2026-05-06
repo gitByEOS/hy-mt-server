@@ -93,10 +93,19 @@ start_service() {
     echo "   服务地址: http://127.0.0.1:${SERVER_PORT}"
     echo "   按 Ctrl+C 可停止服务。"
 
+    # 完全离线模式，阻止任何网络请求
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    export HF_HUB_DISABLE_TELEMETRY=1
+    export HF_HUB_DISABLE_IMPLICIT_TOKEN=1
+
     if [[ "$RUNTIME" == "mlx" ]]
     then
         echo "   模型: ${MLX_MODEL_DIR}"
-        mlx_lm.server --model "$MLX_MODEL_DIR" --host "127.0.0.1" --port "$SERVER_PORT"
+        # 使用绝对路径
+        local abs_model_path
+        abs_model_path="$(cd "$MLX_MODEL_DIR" && pwd)"
+        mlx_lm.server --model "$abs_model_path" --host "127.0.0.1" --port "$SERVER_PORT"
         return
     fi
 

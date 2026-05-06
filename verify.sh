@@ -33,12 +33,21 @@ def infer(model_id, prompt):
     payload = {
         "model": model_id,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 128,
-        "temperature": 0.3,
+        "top_k": 20,
         "top_p": 0.6,
+        "repetition_penalty": 1.05,
+        "temperature": 0.7,
     }
     result = request("POST", "/v1/chat/completions", payload)
     return result["choices"][0]["message"]["content"].strip()
+
+
+def pick_model_id(models):
+    for model in models["data"]:
+        model_id = model["id"]
+        if model_id.startswith("/") or "/" not in model_id:
+            return model_id
+    return models["data"][0]["id"]
 
 
 def validate_output(source, output, forbidden_terms):
@@ -56,7 +65,7 @@ last_error = None
 while time.time() < deadline:
     try:
         models = request("GET", "/v1/models")
-        model_id = models["data"][0]["id"]
+        model_id = pick_model_id(models)
         break
     except (KeyError, IndexError, urllib.error.URLError, TimeoutError) as exc:
         last_error = exc
