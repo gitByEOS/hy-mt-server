@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import base64
+import binascii
 import json
 import socket
 import sys
@@ -9,6 +11,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 WEB_HOST = "0.0.0.0"
 WEB_PORT = 11888
 MODEL_URL = "http://127.0.0.1:11878"
+MAX_REQUEST_BYTES = 7 * 1024 * 1024
+MAX_OCR_IMAGE_BYTES = 5 * 1024 * 1024
 
 HTML = r"""<!doctype html>
 <html lang="zh-CN">
@@ -105,6 +109,20 @@ HTML = r"""<!doctype html>
     .user .bubble {
       background: var(--user);
       color: #f5f5f5;
+    }
+
+    .preview-image {
+      display: block;
+      max-width: 240px;
+      max-height: 320px;
+      border-radius: 12px;
+      object-fit: contain;
+    }
+
+    .message-status {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
     }
 
     .composer-wrap {
@@ -262,6 +280,9 @@ HTML = r"""<!doctype html>
     const empty = document.getElementById("empty");
     const apiBasePath = window.location.pathname.replace(/\/$/, "");
     const translateApiPath = apiBasePath === "" ? "/api/translate" : `${apiBasePath}/api/translate`;
+    const ocrApiPath = apiBasePath === "" ? "/api/ocr" : `${apiBasePath}/api/ocr`;
+    const ocrImageMaxSide = 1280;
+    const ocrImageQuality = 0.8;
 
     function addMessage(role, text = "") {
       empty?.remove();
@@ -274,6 +295,108 @@ HTML = r"""<!doctype html>
       messages.appendChild(row);
       window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
       return bubble;
+    }
+
+    function addImageMessage(imageUrl) {
+      empty?.remove();
+      const row = document.createElement("div");
+      row.className = "message user";
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      const image = document.createElement("img");
+      image.className = "preview-image";
+      image.src = imageUrl;
+      image.alt = "待识别图片";
+      const status = document.createElement("div");
+      status.className = "message-status";
+      status.textContent = "正在识别...";
+      bubble.appendChild(image);
+      bubble.appendChild(status);
+      row.appendChild(bubble);
+      messages.appendChild(row);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      return status;
+    }
+
+    async function readError(response, fallback) {
+      const data = await response.json().catch(() => ({ error: fallback }));
+      return data.error || fallback;
+    }
+
+    function pickPastedImage(event) {
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageItem = items.find((item) => item.type.startsWith("image/"));
+      return imageItem?.getAsFile() || null;
+    }
+
+    function blobToDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function canvasToBlob(canvas) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error("图片压缩失败")),
+          "image/jpeg",
+          ocrImageQuality,
+        );
+      });
+    }
+
+    async function compressImage(file) {
+      const image = await createImageBitmap(file);
+      const scale = Math.min(1, ocrImageMaxSide / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      image.close();
+      const blob = await canvasToBlob(canvas);
+      return blobToDataUrl(blob);
+    }
+
+    async function recognizeImage(imageData) {
+      const response = await fetch(ocrApiPath, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: imageData }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "OCR 失败");
+      }
+      return data.text || "";
+    }
+
+    async function handleImagePaste(event) {
+      const file = pickPastedImage(event);
+      if (!file) return;
+
+      event.preventDefault();
+      submit.disabled = true;
+      let status = null;
+      try {
+        const imageData = await compressImage(file);
+        status = addImageMessage(imageData);
+        const text = await recognizeImage(imageData);
+        status.textContent = `检测到文本：\n${text}`;
+        await translate(text, firstLanguage.value, secondLanguage.value);
+      } catch (error) {
+        if (status) {
+          status.textContent = error.message;
+        } else {
+          addMessage("assistant", `OCR 失败：${error.message}`);
+        }
+      } finally {
+        submit.disabled = false;
+        input.focus();
+      }
     }
 
     async function translate(text, firstLanguageValue, secondLanguageValue) {
@@ -289,7 +412,7 @@ HTML = r"""<!doctype html>
       });
 
       if (!response.ok || !response.body) {
-        answer.textContent = `翻译失败：${response.status}`;
+        answer.textContent = `翻译失败：${await readError(response, `HTTP ${response.status}`)}`;
         return;
       }
 
@@ -331,6 +454,12 @@ HTML = r"""<!doctype html>
       event.preventDefault();
       form.requestSubmit();
     });
+
+    input.addEventListener("paste", (event) => {
+      handleImagePaste(event).catch((error) => {
+        addMessage("assistant", `OCR 失败：${error.message}`);
+      });
+    });
   </script>
 </body>
 </html>
@@ -370,6 +499,83 @@ def local_ips():
     return ips
 
 
+class RequestError(Exception):
+    status = 400
+
+
+class ServerError(Exception):
+    status = 500
+
+
+def decode_image_data_url(image_data):
+    if not isinstance(image_data, str):
+        raise RequestError("图片不能为空")
+    if "," not in image_data:
+        raise RequestError("图片格式无效")
+
+    header, encoded = image_data.split(",", 1)
+    if not header.startswith("data:image/") or ";base64" not in header:
+        raise RequestError("图片格式无效")
+
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise RequestError("图片格式无效") from exc
+
+    if not image_bytes:
+        raise RequestError("图片不能为空")
+    if len(image_bytes) > MAX_OCR_IMAGE_BYTES:
+        raise RequestError("图片过大")
+    return image_bytes
+
+
+def recognize_text_with_vision(image_bytes):
+    try:
+        import Quartz
+        import Vision
+        from Foundation import NSData
+    except ImportError as exc:
+        raise ServerError("缺少 OCR 依赖，请安装 pyobjc-framework-Vision 和 pyobjc-framework-Quartz") from exc
+
+    data = NSData.dataWithBytes_length_(image_bytes, len(image_bytes))
+    source = Quartz.CGImageSourceCreateWithData(data, None)
+    if source is None:
+        raise RequestError("图片格式无效")
+
+    cg_image = Quartz.CGImageSourceCreateImageAtIndex(source, 0, None)
+    if cg_image is None:
+        raise RequestError("图片格式无效")
+
+    request = Vision.VNRecognizeTextRequest.alloc().init()
+    request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
+    request.setUsesLanguageCorrection_(True)
+    try:
+        request.setRecognitionLanguages_(
+            ["zh-Hans", "en-US", "ja-JP", "ko-KR", "fr-FR", "de-DE", "es-ES"]
+        )
+    except Exception:
+        pass
+
+    handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(cg_image, {})
+    success, error = handler.performRequests_error_([request], None)
+    if not success:
+        reason = error.localizedDescription() if error else "未知错误"
+        raise ServerError(f"OCR 失败: {reason}")
+
+    lines = []
+    for observation in request.results() or []:
+        candidates = observation.topCandidates_(1)
+        if not candidates:
+            continue
+        text = candidates[0].string().strip()
+        if text:
+            lines.append(text)
+
+    if not lines:
+        raise RequestError("未识别到文字")
+    return "\n".join(lines)
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != "/":
@@ -387,28 +593,69 @@ class Handler(BaseHTTPRequestHandler):
             return
 
     def do_POST(self):
-        if self.path != "/api/translate":
-            self.send_error(404)
-            return
-
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            data = json.loads(self.rfile.read(length).decode("utf-8"))
-            text = data["text"].strip()
-            first_language = data["first_language"].strip()
-            second_language = data["second_language"].strip()
-            if not text:
-                raise ValueError("empty text")
-            if not first_language or not second_language:
-                raise ValueError("empty language")
-            self.proxy_translate(text, first_language, second_language)
+            if self.path == "/api/translate":
+                self.handle_translate()
+                return
+            if self.path == "/api/ocr":
+                self.handle_ocr()
+                return
+            self.send_json_error(404, "接口不存在")
         except (BrokenPipeError, ConnectionResetError):
             return
+        except RequestError as exc:
+            self.send_json_error(exc.status, str(exc))
+        except ServerError as exc:
+            self.send_json_error(exc.status, str(exc))
         except Exception as exc:
-            self.send_json_error(500, f"翻译失败: {exc}")
+            self.send_json_error(500, f"服务失败: {exc}")
+
+    def read_json_body(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise RequestError("请求长度无效") from exc
+
+        if length <= 0:
+            raise RequestError("请求体不能为空")
+        if length > MAX_REQUEST_BYTES:
+            raise RequestError("请求体过大")
+
+        try:
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RequestError("JSON 格式无效") from exc
+
+    def handle_translate(self):
+        data = self.read_json_body()
+        text = str(data.get("text", "")).strip()
+        first_language = str(data.get("first_language", "")).strip()
+        second_language = str(data.get("second_language", "")).strip()
+        if not text:
+            raise RequestError("文本不能为空")
+        if not first_language or not second_language:
+            raise RequestError("语言不能为空")
+        self.proxy_translate(text, first_language, second_language)
+
+    def handle_ocr(self):
+        data = self.read_json_body()
+        image_bytes = decode_image_data_url(data.get("image"))
+        text = recognize_text_with_vision(image_bytes)
+        self.send_json({"text": text})
+
+    def send_json(self, data, status=200):
+        body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            return
 
     def send_json_error(self, status, message):
-        body = json.dumps({"error": message}, ensure_ascii=False).encode("utf-8")
+        body = json.dumps({"error": message}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         try:
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")

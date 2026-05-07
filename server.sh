@@ -148,7 +148,7 @@ else
 fi
 echo "✅ 环境检查通过。"
 
-# --- 2. 设置 Python 虚拟环境 (可选) ---
+# --- 2. 设置 Python 虚拟环境 ---
 if [[ ! -d "hy-mt-env" ]]
 then
     echo "🐍 创建 Python 虚拟环境..."
