@@ -129,9 +129,9 @@ CPU_BRAND="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
 if [[ "$ARCH" == "arm64" && "$CPU_BRAND" == *"Apple M"* ]]
 then
     RUNTIME="mlx"
-    MODEL_REPO="Tencent-Hunyuan/HY-MT1.5-1.8B"
-    MODEL_DIR="models/HY-MT1.5-1.8B"
-    MLX_MODEL_DIR="models/HY-MT1.5-1.8B-mlx-8bit"
+    MODEL_REPO="Tencent-Hunyuan/Hy-MT2-1.8B" 
+    MODEL_DIR="models/Hy-MT2-1.8B" 
+    MLX_MODEL_DIR="models/Hy-MT2-1.8B-mlx-8bit"
 elif [[ "$ARCH" == "x86_64" && "$CPU_BRAND" == *"Intel"* ]]
 then
     RUNTIME="llama_cpp"
