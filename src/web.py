@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 WEB_HOST = "0.0.0.0"
 WEB_PORT = 11888
 MODEL_URL = "http://127.0.0.1:11878"
+OCR_URL = "http://127.0.0.1:11879"
 MAX_REQUEST_BYTES = 7 * 1024 * 1024
 MAX_OCR_IMAGE_BYTES = 5 * 1024 * 1024
 
@@ -529,6 +530,29 @@ def decode_image_data_url(image_data):
     return image_bytes
 
 
+def recognize_text_with_glm_ocr(image_bytes):
+    """调用 GLM-OCR 服务进行识别"""
+    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+    image_data_url = f"data:image/jpeg;base64,{image_base64}"
+
+    body = json.dumps({"image": image_data_url}).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{OCR_URL}/api/ocr",
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data.get("text", "").strip()
+    except urllib.error.URLError:
+        raise ServerError("GLM-OCR 服务未启动，请先运行 ocr_server.sh")
+    except Exception as exc:
+        raise ServerError(f"GLM-OCR 服务错误: {exc}")
+
+
 def recognize_text_with_vision(image_bytes):
     try:
         import Quartz
@@ -640,8 +664,19 @@ class Handler(BaseHTTPRequestHandler):
     def handle_ocr(self):
         data = self.read_json_body()
         image_bytes = decode_image_data_url(data.get("image"))
+
+        # 优先使用 GLM-OCR 服务
+        try:
+            text = recognize_text_with_glm_ocr(image_bytes)
+            self.send_json({"text": text, "engine": "GLM-OCR"})
+            return
+        except ServerError as exc:
+            # GLM-OCR 失败，回退到 Mac Vision
+            print(f"GLM-OCR 失败，回退到 Mac Vision: {exc}")
+
+        # Mac Vision 备选
         text = recognize_text_with_vision(image_bytes)
-        self.send_json({"text": text})
+        self.send_json({"text": text, "engine": "MacVision"})
 
     def send_json(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

@@ -6,7 +6,7 @@
 
 - Apple Silicon：ModelScope 下载原始模型，本地转换为 MLX 8bit 后使用 `mlx-lm`
 - Intel Mac：使用 `llama-cpp-python` + ModelScope GGUF 模型
-- OCR: 使用 Mac Vision python库
+- OCR: GLM-OCR 模型（Apple Silicon）或 Mac Vision（备选）
 
 ## 环境要求
 
@@ -15,29 +15,44 @@
 
 ## 启动服务
 
+### 翻译服务
+
 ```bash
-./server.sh
+./translate_server.sh
 ```
 
 默认服务地址：
 
 ```text
-http://127.0.0.1:11878
+http://0.0.0.0:11878
 ```
 
 首次启动大概需要5-10分钟，会自动创建虚拟环境、安装依赖、下载模型。
+
+### OCR 服务（可选）
+
+```bash
+./ocr_server.sh
+```
+
+默认服务地址：
+
+```text
+http://0.0.0.0:11879
+```
 
 ## 验证服务
 
 服务启动后，另开一个终端执行：
 
 ```bash
-./verify.sh
+./tools/verify_translate.sh   # 验证翻译服务
+./tools/verify_ocr.sh         # 验证 OCR 服务
 ```
 
 ## 网页访问
 
-1. 启动模型服务
+1. 启动翻译服务（和 OCR 服务，如需 OCR 功能）
 2. 再开一个终端启动网页：
 ```bash
 ./web_launch.sh
@@ -61,8 +76,8 @@ ProxyRequests Off
 ProxyPreserveHost On
 
 # 将所有访问 IP/translate 的请求，转发到本地的 11888 端口
-ProxyPass /translate http://127.0.0.1:11888/
-ProxyPassReverse /translate http://127.0.0.1:11888/
+ProxyPass /translate http://0.0.0.0:11888/
+ProxyPassReverse /translate http://0.0.0.0:11888/
 ```
 5. `sudo apachectl restart`，重启 apache 服务
 
@@ -70,7 +85,7 @@ ProxyPassReverse /translate http://127.0.0.1:11888/
 
 1. 先启动本地服务
 2. 在 Raycast 输入 Create Script Command
-3. 选择`fanyi.sh`
+3. 选择 `tools/fanyi.sh`
 
 使用方式：
 
@@ -78,10 +93,21 @@ ProxyPassReverse /translate http://127.0.0.1:11888/
 
 ## 文件说明
 
-- `server.sh`：启动模型服务
-- `verify.sh`：验证模型服务是否正常
-- `fanyi.sh`：翻译脚本
-- `web_launch.sh`：启动网页并安装网页 OCR 依赖
-- `web.py`：手机网页翻译入口
-- `models/`：下载的模型
-- `hy-mt-env/`：脚本自动创建的 Python 虚拟环境
+```
+hy-mt-server/
+├── translate_server.sh    # 启动翻译模型服务
+├── ocr_server.sh          # 启动 OCR 服务
+├── web_launch.sh          # 启动网页服务
+├── src/
+│   ├── ocr_server.py      # OCR 服务实现（GLM-OCR）
+│   └── web.py             # 网页翻译入口
+├── tools/
+│   ├── verify_translate.sh  # 验证翻译服务
+│   ├── verify_ocr.sh        # 验证 OCR 服务
+│   └── fanyi.sh             # Raycast 翻译脚本
+├── models/                # 下载的模型
+│   ├── Hy-MT2-1.8B/       # 翻译模型（原始）
+│   ├── Hy-MT2-1.8B-mlx-8bit/  # 翻译模型（MLX 8bit）
+│   └── GLM-OCR/           # OCR 模型
+└── hy-mt-env/             # Python 虚拟环境（自动创建）
+```

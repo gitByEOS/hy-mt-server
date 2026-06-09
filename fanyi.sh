@@ -16,7 +16,7 @@
 
 set -e
 
-SERVER_URL="${SERVER_URL:-http://127.0.0.1:11878}"
+SERVER_URL="${SERVER_URL:-http://10.74.0.128:11878}"
 INPUT_TEXT="${1:-}"
 
 if [[ -z "$INPUT_TEXT" ]]

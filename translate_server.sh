@@ -90,7 +90,7 @@ download_model() {
 
 start_service() {
     echo "🚀 启动服务..."
-    echo "   服务地址: http://127.0.0.1:${SERVER_PORT}"
+    echo "   服务地址: http://0.0.0.0:${SERVER_PORT}"
     echo "   按 Ctrl+C 可停止服务。"
 
     # 完全离线模式，阻止任何网络请求
@@ -105,7 +105,7 @@ start_service() {
         # 使用绝对路径
         local abs_model_path
         abs_model_path="$(cd "$MLX_MODEL_DIR" && pwd)"
-        mlx_lm.server --model "$abs_model_path" --host "127.0.0.1" --port "$SERVER_PORT"
+        mlx_lm.server --model "$abs_model_path" --host "0.0.0.0" --port "$SERVER_PORT"
         return
     fi
 
@@ -113,7 +113,7 @@ start_service() {
     python -m llama_cpp.server \
         --model "$MODEL_PATH" \
         --model_alias "hunyuan" \
-        --host "127.0.0.1" \
+        --host "0.0.0.0" \
         --port "$SERVER_PORT"
 }
 

@@ -97,7 +97,7 @@ wait_until_ready() {
 }
 
 start_web() {
-    nohup "$PYTHON" "${SCRIPT_DIR}/web.py" >> "$LOG_PATH" 2>&1 &
+    nohup "$PYTHON" "${SCRIPT_DIR}/src/web.py" >> "$LOG_PATH" 2>&1 &
 }
 
 ensure_python
