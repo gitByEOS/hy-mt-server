@@ -105,7 +105,7 @@ start_service() {
         # 使用绝对路径
         local abs_model_path
         abs_model_path="$(cd "$MLX_MODEL_DIR" && pwd)"
-        mlx_lm.server --model "$abs_model_path" --host "0.0.0.0" --port "$SERVER_PORT"
+        python src/mlx_alias_server.py --model "$abs_model_path" --host "0.0.0.0" --port "$SERVER_PORT"
         return
     fi
 
