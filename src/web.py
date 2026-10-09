@@ -12,6 +12,8 @@ WEB_HOST = "0.0.0.0"
 WEB_PORT = 11888
 MODEL_URL = "http://127.0.0.1:11878"
 OCR_URL = "http://127.0.0.1:11879"
+
+OCR_TIMEOUT_SECONDS = 300
 MAX_REQUEST_BYTES = 7 * 1024 * 1024
 MAX_OCR_IMAGE_BYTES = 5 * 1024 * 1024
 
@@ -544,7 +546,7 @@ def recognize_text_with_glm_ocr(image_bytes):
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as response:
+        with urllib.request.urlopen(req, timeout=OCR_TIMEOUT_SECONDS) as response:
             data = json.loads(response.read().decode("utf-8"))
             return data.get("text", "").strip()
     except urllib.error.URLError:

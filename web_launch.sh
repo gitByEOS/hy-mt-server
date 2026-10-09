@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-WEB_PORT=11888
+WEB_PORT="${WEB_PORT:-11888}"
 PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PYTHON="${SCRIPT_DIR}/hy-mt-env/bin/python"
@@ -97,6 +97,11 @@ wait_until_ready() {
 }
 
 start_web() {
+    if [[ "${FANY_WEB_FOREGROUND:-0}" == "1" ]]
+    then
+        exec "$PYTHON" "${SCRIPT_DIR}/src/web.py"
+    fi
+
     nohup "$PYTHON" "${SCRIPT_DIR}/src/web.py" >> "$LOG_PATH" 2>&1 &
 }
 
