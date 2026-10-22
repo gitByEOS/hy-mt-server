@@ -265,7 +265,7 @@ HTML = r"""<!doctype html>
               <option value="德文">德文</option>
               <option value="西班牙文">西班牙文</option>
             </select>
-            <span class="hint">提示：Shift+Enter 换行</span>
+            <span class="hint">提示：Tab 交换语言 · Shift+Enter 换行</span>
           </div>
           <button id="submit" type="submit">翻译</button>
         </div>
@@ -447,6 +447,17 @@ HTML = r"""<!doctype html>
         submit.disabled = false;
         input.focus();
       }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Tab" || event.isComposing) {
+        return;
+      }
+
+      event.preventDefault();
+      const firstValue = firstLanguage.value;
+      firstLanguage.value = secondLanguage.value;
+      secondLanguage.value = firstValue;
     });
 
     input.addEventListener("keydown", (event) => {
