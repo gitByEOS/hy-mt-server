@@ -129,15 +129,15 @@ CPU_BRAND="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
 if [[ "$ARCH" == "arm64" && "$CPU_BRAND" == *"Apple M"* ]]
 then
     RUNTIME="mlx"
-    MODEL_REPO="Tencent-Hunyuan/Hy-MT2-1.8B" 
-    MODEL_DIR="models/Hy-MT2-1.8B" 
-    MLX_MODEL_DIR="models/Hy-MT2-1.8B-mlx-8bit"
+    MODEL_REPO="Tencent-Hunyuan/Hy-MT3-1.8B"
+    MODEL_DIR="models/Hy-MT3-1.8B"
+    MLX_MODEL_DIR="models/Hy-MT3-1.8B-mlx-8bit"
 elif [[ "$ARCH" == "x86_64" && "$CPU_BRAND" == *"Intel"* ]]
 then
     RUNTIME="llama_cpp"
-    MODEL_REPO="Tencent-Hunyuan/HY-MT1.5-1.8B-GGUF"
-    MODEL_FILE="HY-MT1.5-1.8B-Q4_K_M.gguf"
-    MODEL_DIR="models/HY-MT1.5-1.8B-GGUF"
+    MODEL_REPO="Tencent-Hunyuan/Hy-MT3-1.8B-GGUF"
+    MODEL_FILE="Hy-MT3-1.8B-Q4_K_M.gguf"
+    MODEL_DIR="models/Hy-MT3-1.8B-GGUF"
     MODEL_PATH="${MODEL_DIR}/${MODEL_FILE}"
     LLAMA_CPP_WHEEL_INDEX="${LLAMA_CPP_WHEEL_INDEX:-https://abetlen.github.io/llama-cpp-python/whl/cpu}"
 else

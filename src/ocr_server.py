@@ -106,6 +106,9 @@ class OCRHandler(BaseHTTPRequestHandler):
             text = recognize_text(image_bytes)
             self.send_json({"text": text})
 
+        except (BrokenPipeError, ConnectionResetError):
+            # The client timed out or cancelled the request while OCR was running.
+            return
         except ValueError as e:
             self.send_json_error(400, str(e))
         except Exception as e:
@@ -126,6 +129,7 @@ class OCRHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         except ConnectionError:
+            # BrokenPipeError and ConnectionResetError are ConnectionError subclasses.
             print("客户端已断开，响应未送出")
 
     def send_json_error(self, status, message):
