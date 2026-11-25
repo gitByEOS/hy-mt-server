@@ -81,6 +81,29 @@ ProxyPassReverse /translate http://0.0.0.0:11888/
 ```
 5. `sudo apachectl restart`，重启 apache 服务
 
+## 沉浸式翻译接入
+
+```mermaid
+flowchart TD
+    A[进入插件设置] --> B[翻译服务]
+    B --> C[添加自定义翻译服务]
+    C --> D[选择自定义 AI 或 OpenAI]
+    D --> E["API Key: local"]
+    E --> F["Model: Hy-MT3-1.8B-mlx-8bit"]
+    F --> G["服务名: Hy-MT3-1.8B（可选）"]
+    G --> H["地址接口: http://IP:11878/v1/chat/completions"]
+```
+
+将地址中的 `IP` 替换为运行 Hy-MT3 服务的电脑局域网 IP。
+
+参数建议：
+
+- 每秒最大请求数：`30`
+- 每次请求最大文本长度：`512`
+- 每次请求最大段落数：`10`
+
+也可根据设备性能自行测试并调整上述参数。
+
 ## Raycast 对接
 
 1. 先启动本地服务
